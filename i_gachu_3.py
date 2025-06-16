@@ -64,64 +64,60 @@ def wait_for_candle_start(period_seconds=60):
             break
         time.sleep(0.1)
 
-def validate_oanda_instrument(test_instrument):
-    """验证OANDA交易对是否有效"""
-    try:
-        test_params = {
-            "granularity": "M1",
-            "count": 1,
-            "price": "M"
-        }
-        r = InstrumentsCandles(instrument=test_instrument, params=test_params)
-        client.request(r)
-        return True
-    except Exception as e:
-        global_value.logger(f"{datetime.now()} : [DEBUG]: Invalid OANDA instrument {test_instrument}: {str(e)}", "DEBUG")
-        return False
 
 def get_payout():
     global instrument, currency_pair
     try:
         d = json.loads(global_value.PayoutData)
-        valid_pairs = []
+        filtered_pairs = []
+        
+        # Common index identifiers (including those without numbers)
+        index_identifiers = [
+            'SPX', 'SP', 'NAS', 'NASDAQ', 'DOW', 'NIKKEI', 'FTSE', 'DAX', 
+            'CAC', 'ASX', 'HANG', 'SENG', 'SHANGHAI', 'SENSEX', 'BOVESPA',
+            'IBEX', 'SMI', 'AEX', 'BEL', 'OSLO', 'STOCKHOLM', 'HELSINKI',
+            'US100', 'US30', 'GER30', 'UK100', 'JPN225', 'AUS200',
+            'NASUSD', 'SPXUSD', 'DOWUSD', 'US500', 'TECH100'
+        ]
         
         for pair in d:
             # Check if pair is available for trading (pair[14] is True) and not OTC
             if pair[14] is True and not pair[1].endswith('_otc'):
-                pair_name = pair[1]
+                pair_name = pair[1].upper()
                 
-                # Convert to OANDA instrument format
-                if len(pair_name) == 6:
-                    test_instrument = f"{pair_name[:3]}_{pair_name[3:]}"
-                else:
-                    test_instrument = pair_name.replace('', '_')
+                # Check if it's an index by looking for index identifiers
+                is_index = any(identifier in pair_name for identifier in index_identifiers)
                 
-                # Validate if instrument exists in OANDA
-                if validate_oanda_instrument(test_instrument):
+                # Also check if it contains numbers (additional safety)
+                contains_numbers = any(char.isdigit() for char in pair_name)
+                
+                # Skip if it's an index or contains numbers
+                if not is_index and not contains_numbers:
                     pair_info = {
-                        'name': pair_name,
-                        'oanda_instrument': test_instrument,
+                        'name': pair[1],
                         'payout': pair[5],
                         'type': pair[3]
                     }
-                    valid_pairs.append(pair_info)
+                    filtered_pairs.append(pair_info)
                     # Store in global_value.pairs for reference
-                    global_value.pairs[pair_name] = {'payout': pair[5], 'type': pair[3]}
-                else:
-                    global_value.logger(f"{datetime.now()} : [DEBUG]: Skipping {pair_name} - not available in OANDA", "DEBUG")
+                    global_value.pairs[pair[1]] = {'payout': pair[5], 'type': pair[3]}
         
-        if not valid_pairs:
-            global_value.logger(f"{datetime.now()} : [ERROR]: No valid pairs available for both Pocket Option and OANDA", "ERROR")
+        if not filtered_pairs:
+            global_value.logger(f"{datetime.now()} : [ERROR]: No forex or crypto pairs available for trading (indices excluded)", "ERROR")
             return False
         
-        # Find the pair with highest payout among valid pairs
-        best_pair = max(valid_pairs, key=lambda x: x['payout'])
+        # Find the pair with highest payout
+        best_pair = max(filtered_pairs, key=lambda x: x['payout'])
         
         # Update global variables
         currency_pair = best_pair['name']
-        instrument = best_pair['oanda_instrument']
+        # Convert currency pair name to OANDA instrument format (e.g., EURUSD -> EUR_USD)
+        if len(currency_pair) == 6:
+            instrument = f"{currency_pair[:3]}_{currency_pair[3:]}"
+        else:
+            instrument = currency_pair.replace('', '_')  # Handle other formats if needed
         
-        global_value.logger(f"{datetime.now()} : [INFO]: Selected valid pair: {currency_pair} with payout: {best_pair['payout']}%", "INFO")
+        global_value.logger(f"{datetime.now()} : [INFO]: Selected pair: {currency_pair} with payout: {best_pair['payout']}% (indices excluded)", "INFO")
         global_value.logger(f"{datetime.now()} : [INFO]: OANDA instrument: {instrument}", "INFO")
         
         return True
@@ -129,6 +125,7 @@ def get_payout():
     except Exception as e:
         global_value.logger(f"{datetime.now()} : [ERROR]: Payout Error: {str(e)}", "ERROR")
         return False
+
 
 def get_training_data():
     end_time = datetime.now(timezone.utc)
@@ -228,14 +225,11 @@ def predict_next_move(model, df):
     call_conf = proba[1]
     put_conf = proba[0]
     global_value.logger(f"{datetime.now()} : [DEBUG]: Probabilities - CALL: {call_conf:.2f}, PUT: {put_conf:.2f}", "INFO")
-    if call_conf > PROB_THRESHOLD:
+    
+    if call_conf > put_conf:
         return "call"
-    elif put_conf > PROB_THRESHOLD:
-        return "put"
     else:
-        global_value.logger(f"{datetime.now()} : [INFO]: ⏭️ Skipping trade due to low confidence ({max(call_conf, put_conf):.2f})", "INFO")
-        return None
-
+        return "put"
 
 def perform_trade(amount, pair, action, expiration):
     result = api.buy(amount=amount, active=pair, action=action, expirations=expiration)
