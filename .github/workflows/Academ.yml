@@ -32,4 +32,4 @@ jobs:
         ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
         SSID: ${{ secrets.SSID }}
       run: |
-        python i_gachu_2.py
+        python i_gachu_3.py
