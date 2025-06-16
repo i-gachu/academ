@@ -20,8 +20,8 @@ ssid = os.getenv("SSID")
 demo = True
 
 # Bot Settings
-period = 60
-expiration = 60
+period = 300
+expiration = 300
 INITIAL_AMOUNT = 1
 PROB_THRESHOLD = 0.60
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
@@ -33,7 +33,7 @@ max_candles = 5000
 
 # OANDA setup
 client = oandapyV20.API(access_token=ACCESS_TOKEN)
-granularity = "M1"
+granularity = "M5"
 params = {
     "granularity": granularity,
     "count": 100,
