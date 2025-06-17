@@ -20,8 +20,9 @@ ssid = os.getenv("SSID")
 demo = True
 
 # Bot Settings
-period = 300
-expiration = 300
+period = 300  # Changed from 60 to 300 (5 minutes)
+expiration = 300  # Changed from 60 to 300 (5 minutes)
+
 INITIAL_AMOUNT = 1
 PROB_THRESHOLD = 0.60
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
@@ -33,7 +34,7 @@ max_candles = 5000
 
 # OANDA setup
 client = oandapyV20.API(access_token=ACCESS_TOKEN)
-granularity = "M5"
+granularity = "M5" 
 params = {
     "granularity": granularity,
     "count": 100,
@@ -152,7 +153,8 @@ def get_training_data():
             c_ = float(c["mid"]["c"])
             all_data.append((timestamp, o, h, l, c_))
         last_time = datetime.fromisoformat(candles[-1]["time"].replace("Z", "+00:00"))
-        start_time = last_time + timedelta(minutes=1)
+        start_time = last_time + timedelta(minutes=5)  # Changed from 1 to 5 minutes
+
         time.sleep(0.2)
 
     df = pd.DataFrame(all_data, columns=["time", "open", "high", "low", "close"])
